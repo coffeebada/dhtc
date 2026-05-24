@@ -458,7 +458,7 @@ function App() {
               {/* 우측 하단 타이틀 및 저작권 표시 (기존 유지) */}
               {h === 10 && (
                 <div style={{ position: 'absolute', bottom: '-5px', right: '0px', width: '650px', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', pointerEvents: 'none', zIndex: 10, fontFamily: 'sans-serif', lineHeight: '1.4' }}>
-                  <div style={{ fontSize: '41px', fontWeight: '900', color: '#10b981', marginBottom: '18px', letterSpacing: '-0.5px' }}>
+                  <div style={{ fontSize: '42px', fontWeight: '900', color: '#10b981', marginBottom: '18px', letterSpacing: '-0.5px' }}>
                     Diatonic Harmonica Training Center
                   </div>
                   <div style={{ color: '#475569', fontSize: '18px', fontWeight: '600' }}>
@@ -475,7 +475,7 @@ function App() {
 
         {/* 오디오 대시보드 구역 */}
         <div style={DASHBOARD_STYLE.inlineDashboard}>
-          <div style={{ ...DASHBOARD_STYLE.controlBox, height: '90px', flexDirection: 'column', gap: '4px', padding: '10px 16px', alignContent: 'center', justifyContent: 'center' }}>
+          <div style={{ ...DASHBOARD_STYLE.controlBox, height: '95px', flexDirection: 'column', gap: '4px', padding: '10px 16px', alignContent: 'center', justifyContent: 'center' }}>
             <div style={{ display: 'flex', width: '100%', alignItems: 'center', gap: '10px' }}>
               <label style={{ cursor: 'pointer', color: '#60a5fa', display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0, flexShrink: 0 }}>
                 <Upload size={20} />
@@ -502,7 +502,7 @@ function App() {
             </div>
           </div>
           
-          <div style={{ ...DASHBOARD_STYLE.controlBox, height: '90px' }}>
+          <div style={{ ...DASHBOARD_STYLE.controlBox, height: '95px' }}>
             <button onClick={toggleRecording} style={{ ...DASHBOARD_STYLE.playBtn, width: '48px', height: '48px', borderRadius: '12px', backgroundColor: isRecording ? '#ef4444' : '#374151', fontSize: '13px', fontWeight: '900' }}>
               REC
             </button>
@@ -521,7 +521,7 @@ function App() {
             </div>
           </div>
 
-          <div style={{ ...DASHBOARD_STYLE.controlBox, height: '90px' }}>
+          <div style={{ ...DASHBOARD_STYLE.controlBox, height: '95px' }}>
             <div style={{ flex: 1, minWidth: 0 }}>
               <span style={DASHBOARD_STYLE.label}>MIC VOL ({Math.round(micVolume * 100)}%)</span>
               <input type="range" min="0" max="1" step="0.01" value={micVolume} onChange={(e) => setMicVolume(parseFloat(e.target.value))} style={{ width: '100%' }} />

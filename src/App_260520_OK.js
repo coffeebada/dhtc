@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import * as Tone from 'tone';
 import { Play, Pause, Upload, Mic, Square, Download, Settings, X } from 'lucide-react';
 
-// 🎯 5도권 12개 슬롯 배치 메타데이터 정의 (Db조 나란한조 Bbm 오타 정합 패치 완료)
+// 🎯 5도권 12개 슬롯 배치 메타데이터 정의 (음악이론 기반 완전 정합)
 const keysCircleData = [
   { idx: 0, major: "C",  minor: "Am",  roman: "I",   pos: "1st", angle: 0,   sharpFlat: "⚠️ Natural", type: "natural", displaySig: "♮" },
   { idx: 1, major: "G",  minor: "Em",  roman: "V",   pos: "2nd", angle: 30,  sharpFlat: "1 ♯", type: "sharp", displaySig: "1♯" },
@@ -11,7 +11,7 @@ const keysCircleData = [
   { idx: 4, major: "E",  minor: "C♯m", roman: "III", pos: "5th", angle: 120, sharpFlat: "4 ♯", type: "sharp", displaySig: "4♯" },
   { idx: 5, major: "B",  minor: "G♯m", roman: "VII", pos: "6th", angle: 150, sharpFlat: "5 ♯", type: "sharp", displaySig: "5♯" },
   { idx: 6, major: "G♭", minor: "E♭m", roman: "IV",  pos: "7th", angle: 180, sharpFlat: "6 ♭ / 6 ♯", type: "flat", displaySig: "6♭" },
-  { idx: 7, major: "D♭", minor: "Bbm",  roman: "I♭",  angle: 210, sharpFlat: "5 ♭", type: "flat", displaySig: "5♭" }, 
+  { idx: 7, major: "D♭", minor: "B♭m", roman: "I♭",  pos: "8th", angle: 210, sharpFlat: "5 ♭", type: "flat", displaySig: "5♭" },
   { idx: 8, major: "A♭", minor: "Fm",  roman: "V♭",  pos: "9th", angle: 240, sharpFlat: "4 ♭", type: "flat", displaySig: "4♭" },
   { idx: 9, major: "E♭", minor: "Cm",  roman: "II♭", pos: "10th", angle: 270, sharpFlat: "3 ♭", type: "flat", displaySig: "3♭" },
   { idx: 10, major: "B♭", minor: "Gm",  roman: "VI♭", pos: "11th", angle: 300, sharpFlat: "2 ♭", type: "flat", displaySig: "2♭" },
@@ -19,12 +19,16 @@ const keysCircleData = [
 ];
 
 const romanDegrees = [
-  { text: "I", angle: 0 }, { text: "V", angle: 30 }, { text: "IIm", angle: 60 },
-  { text: "VIm", angle: 90 }, { text: "IIIm", angle: 120 }, { text: "VIIdim", angle: 150 },
+  { text: "I", angle: 0 },
+  { text: "V", angle: 30 },
+  { text: "IIm", angle: 60 },
+  { text: "VIm", angle: 90 },
+  { text: "IIIm", angle: 120 },
+  { text: "VIIdim", angle: 150 },
   { text: "IV", angle: 330 }
 ];
 
-// 🎯 5도권 포지션 레이블 축약형 고정 및 4th 오타 전면 수정 완료
+// 🛠️ 하모니카-모드 표기 전용 힌트 레이블 정의
 const fixedPositionLabels = [
   { text: "1st", harmonicaAngle: 0, songAngle: 0 },
   { text: "2nd", harmonicaAngle: 30, songAngle: -30 },
@@ -34,16 +38,13 @@ const fixedPositionLabels = [
   { text: "5th", harmonicaAngle: 120, songAngle: -120 }
 ];
 
-// 🎯 가로 수평 높이를 반듯하게 일렬 정렬하기 위한 고정 격자 2차원 매트릭스 데이터 구조
 const HARP_LAYOUT = {
   holes: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
-  blow: [0, 4, 7, 12, 16, 19, 24, 28, 31, 36], 
-  draw: [2, 7, 11, 14, 17, 21, 23, 26, 29, 33], 
-  topSpecials: [
-    [3, null], [8, null], [12, null], [15, null], [20, null], [22, null], [null, null], [27, null], [30, null], [35, 46]
-  ],
+  blow: [0, 4, 7, 12, 16, 19, 24, 28, 31, 36],
+  draw: [2, 7, 11, 14, 17, 21, 23, 26, 29, 33],
+  topSpecial: [3, 8, 12, 15, 18, 22, null, 27, 30, 35],
   bottomSpecials: [
-    [1, null, null], [6, 5, null], [10, 9, 8], [13, null, null], [null, null, null], [20, null, null], [25, null, null], [29, null, null], [32, null, null], [37, null, null]
+    [1], [6, 5], [10, 9, 8], [13], [], [20], [25], [29], [32], [37]
   ]
 };
 
@@ -63,23 +64,22 @@ const lowKeys = {
   'LLF': { semi: 5, oct: 2 }
 };
 
-// 🛠️ [정사각형 80px 그리드 가이드 스타일]: 가로 세로 1:1 대칭 비율 유지 및 마진 정밀 압축
 const BOX_STYLE = {
   container: { backgroundColor: '#050a14', width: '1920px', height: '1080px', color: 'white', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', fontFamily: 'sans-serif', boxSizing: 'border-box', overflow: 'hidden', position: 'relative' },
-  contentWrapper: { width: '1080px', display: 'flex', flexDirection: 'column', alignItems: 'center', boxSizing: 'border-box', marginTop: '-15px' },
-  selectBox: { background: '#1e293b', color: '#60a5fa', border: '2px solid #334155', borderRadius: '14px', padding: '6px 16px', fontSize: '18px', fontWeight: '900', outline: 'none' },
-  micBtn: { padding: '10px 20px', borderRadius: '14px', color: 'white', fontWeight: 'bold', cursor: 'pointer', border: 'none', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '15px' },
-  settingsBtn: { backgroundColor: '#1f2937', color: 'white', padding: '10px 18px', borderRadius: '14px', cursor: 'pointer', border: '1px solid #374151', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '15px' },
-  circleBtn: { backgroundColor: '#4f46e5', color: 'white', padding: '10px 18px', borderRadius: '14px', cursor: 'pointer', border: 'none', fontWeight: 'bold', fontSize: '15px', display: 'flex', alignItems: 'center' },
-  gridContainer: { display: 'flex', gap: '10px', padding: '4px 0', width: '100%', justifyContent: 'space-between', marginBottom: '10px', boxSizing: 'border-box' },
-  holeNumber: { width: '80px', height: '54px', border: '2px solid #475569', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '900', fontSize: '24px', color: '#94a3b8', backgroundColor: '#1e293b', margin: '6px 0', userSelect: 'none', flexShrink: 0 }
+  contentWrapper: { width: '1080px', display: 'flex', flexDirection: 'column', alignItems: 'center', boxSizing: 'border-box' },
+  selectBox: { background: '#1e293b', color: '#60a5fa', border: '2px solid #334155', borderRadius: '14px', padding: '8px 20px', fontSize: '20px', fontWeight: '900', outline: 'none' },
+  micBtn: { padding: '12px 24px', borderRadius: '14px', color: 'white', fontWeight: 'bold', cursor: 'pointer', border: 'none', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '16px' },
+  settingsBtn: { backgroundColor: '#1f2937', color: 'white', padding: '12px 20px', borderRadius: '14px', cursor: 'pointer', border: '1px solid #374151', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '16px' },
+  circleBtn: { backgroundColor: '#4f46e5', color: 'white', padding: '12px 20px', borderRadius: '14px', cursor: 'pointer', border: 'none', fontWeight: 'bold', fontSize: '16px', display: 'flex', alignItems: 'center' },
+  gridContainer: { display: 'flex', gap: '8px', padding: '10px 0', width: '100%', justifyContent: 'space-between', marginBottom: '25px', boxSizing: 'border-box' },
+  holeNumber: { width: '90px', height: '60px', border: '2px solid #475569', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '900', fontSize: '26px', color: '#94a3b8', backgroundColor: '#1e293b', margin: '8px 0', userSelect: 'none' }
 };
 
 const DASHBOARD_STYLE = {
-  inlineDashboard: { width: '100%', display: 'grid', gridTemplateColumns: '1.2fr 0.9fr 0.9fr', gap: '12px', marginTop: '20px', backgroundColor: '#111827', padding: '12px', borderRadius: '24px', border: '1px solid #374151', boxSizing: 'border-box' },
-  controlBox: { display: 'flex', alignItems: 'center', gap: '10px', backgroundColor: '#1f2937', padding: '10px 14px', borderRadius: '18px', border: '1px solid #374151', minWidth: 0, boxSizing: 'border-box', width: '100%', height: '100px' },
-  playBtn: { border: 'none', backgroundColor: '#22c55e', color: 'white', width: '32px', height: '32px', borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  label: { fontSize: '11px', color: '#94a3b8', fontWeight: 'bold', display: 'block', marginBottom: '2px' }
+  inlineDashboard: { width: '100%', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', marginTop: '55px', backgroundColor: '#111827', padding: '16px', borderRadius: '24px', border: '1px solid #374151', boxSizing: 'border-box' },
+  controlBox: { display: 'flex', alignItems: 'center', gap: '10px', backgroundColor: '#1f2937', padding: '12px 18px', borderRadius: '18px', border: '1px solid #374151', minWidth: 0, boxSizing: 'border-box', width: '100%', height: '70px' },
+  playBtn: { border: 'none', backgroundColor: '#22c55e', color: 'white', width: '34px', height: '34px', borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  label: { fontSize: '11px', color: '#94a3b8', fontWeight: 'bold', display: 'block', marginBottom: '3px' }
 };
 
 const MODAL_STYLE = {
@@ -89,7 +89,7 @@ const MODAL_STYLE = {
 };
 
 const CIRCLE_STYLE = {
-  container: { display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: '60px', width: '1920px', height: '1080px', boxSizing: 'border-box', backgroundColor: '#050a14', color: 'white', fontFamily: 'sans-serif' },
+  container: { display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: '80px', width: '1920px', height: '1080px', boxSizing: 'border-box', backgroundColor: '#050a14', color: 'white', fontFamily: 'sans-serif' },
   circleWrapper: { position: 'relative', width: '920px', height: '920px', display: 'flex', alignItems: 'center', justifyContent: 'center' },
   rotatableWheel: (angle, isDragging) => ({ position: 'absolute', width: '740px', height: '740px', borderRadius: '50%', zIndex: 10, transform: `rotate(${angle}deg)`, cursor: isDragging ? 'grabbing' : 'grab', overflow: 'visible', transition: isDragging ? 'none' : 'transform 0.4s cubic-bezier(0.25, 1, 0.5, 1)' }),
   wheelBg: { width: '100%', height: '100%', borderRadius: '50%', position: 'absolute', background: 'conic-gradient(#e51c23 0deg 30deg, #f57c00 30deg 60deg, #ffb74d 60deg 90deg, #fdd835 90deg 120deg, #aeea00 120deg 150deg, #4caf50 150deg 180deg, #00b0ff 180deg 210deg, #00e5ff 210deg 240deg, #2979ff 240deg 270deg, #3f51b5 270deg 300deg, #673ab7 300deg 330deg, #e91e63 330deg 360deg)', transform: 'rotate(-15deg)', zIndex: 1 },
@@ -102,10 +102,13 @@ const CIRCLE_STYLE = {
   btnStyleMaj: { width: '70px', height: '50px', fontSize: '30px', fontWeight: '900', color: '#ffffff', textShadow: '-2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000, -2px -1px 0 #000, 2px 1px 0 #000, 0px -2px 0 #000, 0px 2px 0 #000, 0px 3px 5px rgba(0,0,0,0.9)' },
   btnStyleMin: { width: '60px', height: '40px', fontSize: '18px', fontWeight: '800', color: '#a3b8cc', textShadow: '0px 1px 3px rgba(0,0,0,0.8)' },
   signatureTextBadge: (opacity, isSharp, isFlat) => ({ position: 'absolute', zIndex: 11, fontSize: opacity === 1 ? '34px' : '28px', fontWeight: '900', display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', opacity: opacity, color: isSharp ? '#ef4444' : (isFlat ? '#3b82f6' : '#64748b'), transition: 'opacity 0.15s ease, transform 0.4s' }),
+  
+  // 🌟 [수정 완료]: 가독성을 해치는 그림자(textShadow) 효과를 완벽 지우고 나란한조 글씨체 톤 테마(#a3b8cc) 일체화
   romanDegreeBadge: { position: 'absolute', zIndex: 8, fontSize: '26px', fontWeight: '900', color: '#a3b8cc', display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' },
+  
   staticOverlayLayer: { position: 'absolute', width: '100%', height: '100%', top: 0, left: 0, zIndex: 20, pointerEvents: 'none' },
   staticFixedPositionBadge: { position: 'absolute', zIndex: 25, width: '380px', height: '30px', fontSize: '18px', fontWeight: '800', color: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center', textShadow: '0px 2px 4px rgba(0, 0, 0, 0.65)' },
-  tablePanel: { width: '520px' },
+  tablePanel: { width: '520px' }, // 모드 이름이 늘어남에 따른 표 가로 확장 폭 마진 보정
   clickablePanelTitle: { fontSize: '22px', fontWeight: 'bold', marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '3px solid #374151', padding: '0 16px', borderRadius: '12px', backgroundColor: '#111827', height: '55px', border: '1px solid #374151', boxSizing: 'border-box', cursor: 'pointer' },
   dynamicTitleValue: (isBlue) => ({ fontSize: '22px', fontWeight: '900', letterSpacing: '-0.3px', color: isBlue ? '#3b82f6' : '#10b981' }),
   table: { width: '100%', borderCollapse: 'collapse', boxShadow: '0 4px 15px rgba(0,0,0,0.5)' },
@@ -131,7 +134,6 @@ export default function SingleFileAppRouter() {
   }
   return <App />;
 }
-
 function App() {
   const [currentKey, setCurrentKey] = useState('C');
   const [isLowKey, setIsLowKey] = useState(false);
@@ -144,10 +146,6 @@ function App() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [fileName, setFileName] = useState("No file");
   const [showOverbanding, setShowOverbanding] = useState(true);
-
-  // 배킹 트랙 속도 및 반음 키 전조 제어용 상태
-  const [playbackRate, setPlaybackRate] = useState(1.0);
-  const [pitchKeyOffset, setPitchKeyOffset] = useState(0);
 
   // 볼륨 및 공간계 설정 상태
   const [mrVolume, setMrVolume] = useState(0.8);
@@ -190,7 +188,7 @@ function App() {
     mixedBus.current.connect(recorder.current);
 
     mrGain.current = new Tone.Gain(mrVolume).connect(mixedBus.current);
-    shifter.current = new Tone.PitchShift(pitchKeyOffset).connect(mrGain.current);
+    shifter.current = new Tone.PitchShift(0).connect(mrGain.current);
 
     stdVerb.current = new Tone.Reverb({ decay: 2.5, wet: 0 }).connect(mixedBus.current);
     springSlap.current = new Tone.FeedbackDelay({ delayTime: "32n", feedback: 0.2, wet: 0 });
@@ -240,20 +238,6 @@ function App() {
   useEffect(() => { if (mrGain.current) mrGain.current.gain.rampTo(mrVolume, 0.1); }, [mrVolume]);
   useEffect(() => { if (micGain.current) micGain.current.gain.rampTo(micVolume, 0.1); }, [micVolume]);
   useEffect(() => { if (synthGain.current) synthGain.current.gain.rampTo(synthVolume, 0.1); }, [synthVolume]);
-
-  // 실시간 슬라이더 속도값 변화 반영 훅
-  useEffect(() => {
-    if (trackPlayer.current) {
-      trackPlayer.current.playbackRate = playbackRate;
-    }
-  }, [playbackRate]);
-
-  // 실시간 반음 키 단위 전조 피치 반영 훅
-  useEffect(() => {
-    if (shifter.current) {
-      shifter.current.pitch = pitchKeyOffset;
-    }
-  }, [pitchKeyOffset]);
 
   const getNoteName = (semi) => {
     if (semi === null) return null;
@@ -349,11 +333,11 @@ function App() {
   const handleFileUpload = (e) => {
     const files = e.target.files;
     if (files && files.length > 0) {
-      const targetFile = files[0]; 
+      const targetFile = files; 
       setFileName(targetFile.name);
       const url = URL.createObjectURL(targetFile);
       if (trackPlayer.current) trackPlayer.current.dispose();
-      trackPlayer.current = new Tone.Player({ url, fadeIn: 0.1, fadeOut: 0.1, playbackRate: playbackRate }).connect(shifter.current);
+      trackPlayer.current = new Tone.Player({ url, fadeIn: 0.1, fadeOut: 0.1 }).connect(shifter.current);
     }
   };
 
@@ -393,7 +377,7 @@ function App() {
       setIsRecordedPlaying(true);
     }
   };
-  return (
+   return (
     <div style={BOX_STYLE.container}>
       <div style={BOX_STYLE.contentWrapper}>
 
@@ -419,52 +403,36 @@ function App() {
           </button>
         </div>
 
-        {/* 🛠️ [정사각형 80px 완벽 정렬 매트릭스]: 그림 속 실제 칸 여백과 100% 동일하게 일치 보정 완료 */}
-  <div style={BOX_STYLE.gridContainer}>
+        {/* 메인 하모니카 그리드 레이아웃 */}
+        <div style={BOX_STYLE.gridContainer}>
           {HARP_LAYOUT.holes.map((h, i) => (
-            <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative', width: '80px' }}>
-              
-              {/* 1. 상단 오버 존 스택 구역 (세로 4px 고정 간격 정렬, 아래에서부터 채워짐) */}
-              <div style={{ display: 'flex', flexDirection: 'column-reverse', gap: '8px', height: '164px', width: '80px', justifyContent: 'start', alignItems: 'center', marginBottom: '12px' }}>
-                {HARP_LAYOUT.topSpecials[i].map((semiVal, tIdx) => (
-                  <div key={tIdx} style={{ width: '80px', height: '80px', visibility: semiVal === null ? 'hidden' : 'visible', flexShrink: 0 }}>
-                    <NoteBox semi={semiVal} getNote={getNoteName} activeNote={activeNote} cents={centsOff} limit={tolerance} onStart={handleNoteStart} onStop={handleNoteStop} isBlowZone={true} holeNum={h} showOverbanding={showOverbanding} />
-                  </div>
-                ))}
-              </div>
+            <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative' }}>
+              {h === 10 ? (
+                <NoteBox semi={46} getNote={getNoteName} activeNote={activeNote} cents={centsOff} limit={tolerance} onStart={handleNoteStart} onStop={handleNoteStop} isTopBb={true} showOverbanding={showOverbanding} />
+              ) : (
+                <div style={{ height: '90px', width: '90px', margin: '3px 0' }}></div>
+              )}
 
-              {/* 2. 표준 블로우 행 (Blow 고정축) */}
-              <div style={{ width: '80px', height: '80px', flexShrink: 0, marginBottom: '12px' }}>
-                <NoteBox semi={HARP_LAYOUT.blow[i]} getNote={getNoteName} activeNote={activeNote} cents={centsOff} limit={tolerance} onStart={handleNoteStart} onStop={handleNoteStop} showOverbanding={showOverbanding} />
-              </div>
-              
-              {/* 3. 중앙 가이드 홀 번호 행 (기존 margin 제거하고 Layout 흐름에 병합) */}
-              <div style={{ ...BOX_STYLE.holeNumber, margin: '0 0 4px 0' }}>{h}</div>
-              
-              {/* 4. 표준 드로우 행 (Draw 고정축) */}
-              <div style={{ width: '80px', height: '80px', flexShrink: 0, marginBottom: '10px' }}>
-                <NoteBox semi={HARP_LAYOUT.draw[i]} getNote={getNoteName} activeNote={activeNote} cents={centsOff} limit={tolerance} onStart={handleNoteStart} onStop={handleNoteStop} showOverbanding={showOverbanding} />
-              </div>
+              <NoteBox semi={HARP_LAYOUT.topSpecial[i]} getNote={getNoteName} activeNote={activeNote} cents={centsOff} limit={tolerance} onStart={handleNoteStart} onStop={handleNoteStop} isBlowZone={true} holeNum={h} showOverbanding={showOverbanding} />
+              <NoteBox semi={HARP_LAYOUT.blow[i]} getNote={getNoteName} activeNote={activeNote} cents={centsOff} limit={tolerance} onStart={handleNoteStart} onStop={handleNoteStop} showOverbanding={showOverbanding} />
+              <div style={BOX_STYLE.holeNumber}>{h}</div>
+              <NoteBox semi={HARP_LAYOUT.draw[i]} getNote={getNoteName} activeNote={activeNote} cents={centsOff} limit={tolerance} onStart={handleNoteStart} onStop={handleNoteStop} showOverbanding={showOverbanding} />
 
-              {/* 5. 하단 벤딩 존 스택 구역 (세로 4px 고정 간격 정렬, 위에서부터 채워짐) */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', height: '248px', width: '80px', justifyContent: 'start', alignItems: 'center' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', minHeight: '280px', gap: '4px' }}>
                 {HARP_LAYOUT.bottomSpecials[i].map((semiVal, sIdx) => (
-                  <div key={sIdx} style={{ width: '80px', height: '80px', visibility: semiVal === null ? 'hidden' : 'visible', flexShrink: 0 }}>
-                    <NoteBox semi={semiVal} getNote={getNoteName} activeNote={activeNote} cents={centsOff} limit={tolerance} onStart={handleNoteStart} onStop={handleNoteStop} isDrawZone={true} holeNum={h} showOverbanding={showOverbanding} />
-                  </div>
+                  <NoteBox key={sIdx} semi={semiVal} getNote={getNoteName} activeNote={activeNote} cents={centsOff} limit={tolerance} onStart={handleNoteStart} onStop={handleNoteStop} isDrawZone={true} holeNum={h} showOverbanding={showOverbanding} />
                 ))}
               </div>
 
-              {/* 우측 하단 타이틀 및 저작권 표시 (기존 유지) */}
               {h === 10 && (
                 <div style={{ position: 'absolute', bottom: '-5px', right: '0px', width: '650px', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', pointerEvents: 'none', zIndex: 10, fontFamily: 'sans-serif', lineHeight: '1.4' }}>
-                  <div style={{ fontSize: '41px', fontWeight: '900', color: '#10b981', marginBottom: '18px', letterSpacing: '-0.5px' }}>
-                    Diatonic Harmonica Training Center
+                  <div style={{ fontSize: '38px', fontWeight: '900', color: '#10b981', marginBottom: '18px', letterSpacing: '-0.5px' }}>
+                    Harmonica Training Room
                   </div>
-                  <div style={{ color: '#475569', fontSize: '18px', fontWeight: '600' }}>
-                    Copyright ⓒ 2026 CoffeeBada Lee, ChoongKoo All Rights Reserved.
+                  <div style={{ color: '#475569', fontSize: '14px', fontWeight: '600' }}>
+                    Copyright ⓒ 2026 CoffeeBada Lee, Choong-Koo All Rights Reserved.
                   </div>
-                  <div style={{ color: '#64748b', fontSize: '18px', fontWeight: '600', marginTop: '2px' }}>
+                  <div style={{ color: '#64748b', fontSize: '14px', fontWeight: '600', marginTop: '2px' }}>
                     Contact : 279.lee@gmail.com
                   </div>
                 </div>
@@ -473,43 +441,31 @@ function App() {
           ))}
         </div>
 
-        {/* 오디오 대시보드 구역 */}
+        {/* 오디오 대시보드 */}
         <div style={DASHBOARD_STYLE.inlineDashboard}>
-          <div style={{ ...DASHBOARD_STYLE.controlBox, height: '90px', flexDirection: 'column', gap: '4px', padding: '10px 16px', alignContent: 'center', justifyContent: 'center' }}>
-            <div style={{ display: 'flex', width: '100%', alignItems: 'center', gap: '10px' }}>
-              <label style={{ cursor: 'pointer', color: '#60a5fa', display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0, flexShrink: 0 }}>
-                <Upload size={20} />
-                <span style={{ fontSize: '13px', maxWidth: '85px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: '600' }}>{fileName}</span>
-                <input type="file" onChange={handleFileUpload} hidden accept="audio/*" />
-              </label>
-              <button onClick={toggleTrack} style={DASHBOARD_STYLE.playBtn}>
-                {isPlaying ? <Pause size={16} /> : <Play size={16} />}
-              </button>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <span style={DASHBOARD_STYLE.label}>MR VOL ({Math.round(mrVolume * 100)}%)</span>
-                <input type="range" min="0" max="1" step="0.01" value={mrVolume} onChange={(e) => setMrVolume(parseFloat(e.target.value))} style={{ width: '100%', height: '4px' }} />
-              </div>
-            </div>
-            <div style={{ display: 'flex', width: '100%', gap: '18px', marginTop: '2px' }}>
-              <div style={{ flex: 1 }}>
-                <span style={DASHBOARD_STYLE.label}>SPEED ({playbackRate.toFixed(2)}x)</span>
-                <input type="range" min="0.4" max="1.0" step="0.05" value={playbackRate} onChange={(e) => setPlaybackRate(parseFloat(e.target.value))} style={{ width: '100%', height: '4px' }} />
-              </div>
-              <div style={{ flex: 1 }}>
-                <span style={DASHBOARD_STYLE.label}>KEY PITCH ({pitchKeyOffset > 0 ? `+${pitchKeyOffset}` : pitchKeyOffset})</span>
-                <input type="range" min="-6" max="6" step="1" value={pitchKeyOffset} onChange={(e) => setPitchKeyOffset(parseInt(e.target.value))} style={{ width: '100%', height: '4px' }} />
-              </div>
+          <div style={DASHBOARD_STYLE.controlBox}>
+            <label style={{ cursor: 'pointer', color: '#60a5fa', display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0, flexShrink: 0 }}>
+              <Upload size={22} />
+              <span style={{ fontSize: '14px', maxWidth: '100px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: '600' }}>{fileName}</span>
+              <input type="file" onChange={handleFileUpload} hidden accept="audio/*" />
+            </label>
+            <button onClick={toggleTrack} style={DASHBOARD_STYLE.playBtn}>
+              {isPlaying ? <Pause size={18} /> : <Play size={18} />}
+            </button>
+            <div style={{ flex: 1, minWidth: 0, marginLeft: '8px' }}>
+              <span style={DASHBOARD_STYLE.label}>MR VOL</span>
+              <input type="range" min="0" max="1" step="0.01" value={mrVolume} onChange={(e) => setMrVolume(parseFloat(e.target.value))} style={{ width: '100%' }} />
             </div>
           </div>
           
-          <div style={{ ...DASHBOARD_STYLE.controlBox, height: '90px' }}>
-            <button onClick={toggleRecording} style={{ ...DASHBOARD_STYLE.playBtn, width: '48px', height: '48px', borderRadius: '12px', backgroundColor: isRecording ? '#ef4444' : '#374151', fontSize: '13px', fontWeight: '900' }}>
-              REC
+          <div style={DASHBOARD_STYLE.controlBox}>
+            <button onClick={toggleRecording} style={{ ...DASHBOARD_STYLE.playBtn, backgroundColor: isRecording ? '#ef4444' : '#374151' }}>
+              {isRecording ? <Square size={16} /> : <Mic size={16} />}
             </button>
             <button onClick={toggleRecordedPlayback} disabled={!recordedUrl} style={{ ...DASHBOARD_STYLE.playBtn, backgroundColor: recordedUrl ? '#3b82f6' : '#4b5563', cursor: recordedUrl ? 'pointer' : 'not-allowed' }}>
               {isRecordedPlaying ? <Pause size={16} /> : <Play size={16} />}
             </button>
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', marginLeft: '2px' }}>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', marginLeft: '6px' }}>
               <span style={DASHBOARD_STYLE.label}>MIX RECORDER</span>
               {recordedUrl ? (
                 <a href={recordedUrl} download="harmonica_practice.wav" style={{ color: '#10b981', fontSize: '12px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px', textDecoration: 'none' }}>
@@ -521,13 +477,13 @@ function App() {
             </div>
           </div>
 
-          <div style={{ ...DASHBOARD_STYLE.controlBox, height: '90px' }}>
+          <div style={DASHBOARD_STYLE.controlBox}>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <span style={DASHBOARD_STYLE.label}>MIC VOL ({Math.round(micVolume * 100)}%)</span>
-              <input type="range" min="0" max="1" step="0.01" value={micVolume} onChange={(e) => setMicVolume(parseFloat(e.target.value))} style={{ width: '100%' }} />
+              <span style={DASHBOARD_STYLE.label}>MIC VOL</span>
+              <input type="range" min="0" max="1" step="0.01" value={micVolume} onChange={(e) => setMrVolume(parseFloat(e.target.value))} style={{ width: '100%' }} />
             </div>
             <div style={{ flex: 1, minWidth: 0, marginLeft: '10px' }}>
-              <span style={DASHBOARD_STYLE.label}>SYNTH VOL ({Math.round(synthVolume * 100)}%)</span>
+              <span style={DASHBOARD_STYLE.label}>SYNTH VOL</span>
               <input type="range" min="0" max="1" step="0.01" value={synthVolume} onChange={(e) => setSynthVolume(parseFloat(e.target.value))} style={{ width: '100%' }} />
             </div>
           </div>
@@ -576,30 +532,26 @@ function App() {
 
 function NoteBox({ semi, getNote, activeNote, cents, limit, onStart, onStop, isBlowZone, isDrawZone, isTopBb, holeNum, showOverbanding }) {
   const noteName = getNote(semi);
-  if (semi === null || !noteName) return <div style={{ height: '80px', width: '80px', margin: '3px 0' }}></div>;
+  if (semi === null || !noteName) return <div style={{ height: '90px', width: '90px', margin: '3px 0' }}></div>;
   const isActive = activeNote === noteName;
   const displayLabel = noteName.replace(/\d+/g, '');
   const safeCents = Math.max(-limit, Math.min(limit, cents));
   const indicatorLeft = 50 + (safeCents / limit) * 40;
+  const isOverblowCell = isBlowZone && (holeNum >= 1 && holeNum <= 6);
+  const isOverdrawCell = isDrawZone && (holeNum >= 7 && holeNum <= 10) && (semi === 25 || semi === 29 || semi === 32 || semi === 37);
+  const hideContent = !showOverbanding && (isOverblowCell || isOverdrawCell);
   let bgColor = '#1e293b'; let borderStyle = '1px solid #334155';
-  if (isActive) { bgColor = Math.abs(cents) <= limit ? '#22c55e' : (cents > limit ? '#eab308' : '#ef4444'); }
-  else { if (isTopBb) bgColor = '#93c5fd'; 
-    else if (isBlowZone) {
-  // 상단 스택(isBlowZone) 중 8, 9, 10번 홀만 하늘색으로 지정
-  if (holeNum >= 8 && holeNum <= 10) {
-    bgColor = '#93c5fd'; // 하늘색
-  } else {
-    bgColor = '#fca5a5'; // 나머지 홀의 기존 색상 유지
-  }
-}
-    else if (isDrawZone) bgColor = (holeNum >= 7 && holeNum <= 10) ? '#f59e0b' : '#93c5fd'; }
+  if (isActive && !hideContent) { bgColor = Math.abs(cents) <= limit ? '#22c55e' : (cents > limit ? '#eab308' : '#ef4444'); }
+  else if (hideContent) { bgColor = 'transparent'; borderStyle = '1px solid transparent'; }
+  else { if (isTopBb) bgColor = '#93c5fd'; else if (isOverblowCell) bgColor = '#fca5a5'; else if (isBlowZone) bgColor = '#93c5fd'; else if (isDrawZone) bgColor = (holeNum >= 7 && holeNum <= 10) ? '#f59e0b' : '#93c5fd'; }
   return (
-    <div style={{ width: '80px', height: '80px', margin: '3px 0', borderRadius: '14px', border: borderStyle, backgroundColor: bgColor, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', overflow: 'hidden', cursor: 'pointer', userSelect: 'none' }} onMouseDown={() => onStart(noteName)} onMouseUp={onStop} onMouseLeave={onStop}>
-      <span style={{ fontWeight: '900', fontSize: '24px', color: 'white', zIndex: 10 }}>{displayLabel}</span>
-      {isActive && <div style={{ position: 'absolute', left: `${indicatorLeft}%`, width: '4px', height: '100%', backgroundColor: 'rgba(255,255,255,0.9)', zIndex: 5 }} />}
+    <div style={{ width: '90px', height: '90px', margin: '3px 0', borderRadius: '14px', border: borderStyle, backgroundColor: bgColor, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', overflow: 'hidden', cursor: hideContent ? 'default' : 'pointer', userSelect: 'none' }} onMouseDown={() => !hideContent && onStart(noteName)} onMouseUp={onStop} onMouseLeave={onStop}>
+      <span style={{ fontWeight: '900', fontSize: '24px', color: hideContent ? 'transparent' : 'white', zIndex: 10 }}>{displayLabel}</span>
+      {isActive && !hideContent && <div style={{ position: 'absolute', left: `${indicatorLeft}%`, width: '4px', height: '100%', backgroundColor: 'rgba(255,255,255,0.9)', zIndex: 5 }} />}
     </div>
   );
 }
+
 // 🎯 [5도권 시각화 페이지 컴포넌트 본문 구역 독립 매핑]
 function NewFeaturePage({ onRouteClick }) {
   const [rotationAngle, setRotationAngle] = useState(0);
@@ -617,6 +569,7 @@ function NewFeaturePage({ onRouteClick }) {
 
   const currentSelectedKey = keysCircleData[activeIndex];
 
+  // 🛠️ 5도권 링 상의 상대 오프셋 인덱스를 안전하게 계산하는 래퍼 함수
   const getKeyByOffsetIndex = (offsetSlotCount) => {
     return keysCircleData[(activeIndex + offsetSlotCount + 12) % 12];
   };
@@ -703,6 +656,7 @@ function NewFeaturePage({ onRouteClick }) {
               
               const isTopActiveSlot = item.idx === activeIndex;
 
+              // 12시 방향일 때 메이저 노드 "C Maj / Cm" 형태로 완전 결합
               const displayMajorLabel = (displayMode === 'song' && isTopActiveSlot)
                 ? `${item.major} Maj / ${item.major}m`
                 : item.major;
@@ -794,6 +748,7 @@ function NewFeaturePage({ onRouteClick }) {
         </div>
       </div>
 
+      {/* 우측 포지션 정보 테이블 패널 */}
       <div style={CIRCLE_STYLE.tablePanel}>
         <div style={CIRCLE_STYLE.clickablePanelTitle} onClick={toggleDisplayMode}>
           <span style={{ fontWeight: '900', color: '#ffffff' }}>{displayMode === 'harmonica' ? 'Harmonica Key' : 'Song Key'}</span>
@@ -810,6 +765,7 @@ function NewFeaturePage({ onRouteClick }) {
             </tr>
           </thead>
           <tbody>
+            {/* 🛠️ [요청 반영 완료]: 모드 레이블 명칭 수정 및 도수 정밀 수학적 연산 매핑 연동 */}
             <tr>
               <td rowSpan="3" style={{ ...CIRCLE_STYLE.thTd, ...CIRCLE_STYLE.bgGray, width: '20%' }}>Major</td>
               <td style={{ ...CIRCLE_STYLE.thTd, width: '55%', fontSize: '15px', textAlign: 'left' }}>1st Position / Ionian Mode</td>
@@ -826,14 +782,17 @@ function NewFeaturePage({ onRouteClick }) {
             <tr>
               <td rowSpan="3" style={{ ...CIRCLE_STYLE.thTd, ...CIRCLE_STYLE.bgGray }}>minor</td>
               <td style={{ ...CIRCLE_STYLE.thTd, fontSize: '15px', textAlign: 'left' }}>3rd Position / Dorian Mode</td>
+              {/* 🎯 3rd 포지션 = 2도m (5도권 시계방향으로 2칸 전진한 Major 키의 마이너 포맷 추출) */}
               <td style={{ ...CIRCLE_STYLE.thTd, fontWeight: 'bold', color: '#fb923c' }}>{getKeyByOffsetIndex(2).major}m</td>
             </tr>
             <tr>
               <td style={{ ...CIRCLE_STYLE.thTd, fontSize: '15px', textAlign: 'left' }}>4th Position / Aeolian Mode</td>
+              {/* 🎯 4th 포지션 = 6도m (5도권 시계방향으로 3칸 전진한 Major 키의 마이너 포맷 추출) */}
               <td style={{ ...CIRCLE_STYLE.thTd, fontWeight: 'bold', color: '#fb923c' }}>{getKeyByOffsetIndex(3).major}m</td>
             </tr>
             <tr>
               <td style={{ ...CIRCLE_STYLE.thTd, fontSize: '15px', textAlign: 'left' }}>5th Position / Phrygian Mode</td>
+              {/* 🎯 5th 포지션 = 3도m (5도권 시계방향으로 4칸 전진한 Major 키의 마이너 포맷 추출) */}
               <td style={{ ...CIRCLE_STYLE.thTd, fontWeight: 'bold', color: '#fb923c' }}>{getKeyByOffsetIndex(4).major}m</td>
             </tr>
           </tbody>
