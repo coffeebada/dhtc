@@ -772,7 +772,7 @@ function NewFeaturePage({ onRouteClick }) {
               <textPath href="#core-top-path" startOffset="50%" textAnchor="middle">The Circle of Fifths</textPath>
             </text>
             <text fontSize="11.7px" fontWeight="bold" fill="#94a3b8" letterSpacing="-0.3px">
-              <textPath href="#core-bottom-path" startOffset="50%" textAnchor="middle">Copyright © 2026. coffeebada All rights reserved.</textPath>
+              <textPath href="#core-bottom-path" startOffset="50%" textAnchor="middle">Copyright©2026. coffeebada All rights reserved.</textPath>
             </text>
           </svg>
         </div>
